@@ -2,5 +2,5 @@
 export CUDA_VISIBLE_DEVICES='0'
 model_name=DDAEC
 echo $model_name
-python -u train_ddaec.py --train_list=../filelists/trainFileList_min.txt --evaluate_file=/home/panjiahui/code/Time_Domain/DDAEC/data/mixture/test/test_factory1_snr-5_seen.samp --display_eval_steps=250 --eval_plot_num=3 --model_name=DDAEC_min_asr --width=64 --batch_size=4
+python -u train_ddaec.py --train_list=../filelists/trainFileList_min.txt --evaluate_file=/home/panjiahui/code/Time_Domain/DDAEC/data/mixture/test/test_factory1_snr-5_seen.samp --display_eval_steps=24 --eval_plot_num=3 --model_name=DDAEC_min_asr --width=64 --batch_size=3
 #--resume_model=../models/${model_name}/${model_name}_latest.model

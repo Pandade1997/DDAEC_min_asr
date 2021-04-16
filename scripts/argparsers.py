@@ -76,8 +76,12 @@ class Args(object):
                 os.makedirs(self.model_path)
             self.fig_path = os.path.join(root_path, 'figures', self.model_name)
             self.wav_path = os.path.join('../waves/', self.model_name, 'val')
+            self.train_wav_path = os.path.join('../waves/', self.model_name, 'train')
+
             if not os.path.isdir(self.wav_path):
                 os.makedirs(self.wav_path)
+            if not os.path.isdir(self.train_wav_path):
+                os.makedirs(self.train_wav_path)
             # hyperparameters
             self.num_train_sentences = 100
             self.num_test_sentences = 150

@@ -13,7 +13,8 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 # from progressbar import ProgressBar, Bar, Timer, ETA, Percentage, DynamicMessage
 
-from datasets import TrainingDataset, EvalDataset, ToTensor, TrainCollate, EvalCollate, SignalToFrames, OLA, ToTensor
+from datasets import TrainingDataset, Training_asr_Dataset, EvalDataset, ToTensor, TrainCollate, EvalCollate, \
+    SignalToFrames, OLA, ToTensor
 from networks import Net
 from criteria import mse_loss, stftm_loss
 from utils import compLossMask, numParams, logging, plotting, metric_logging
@@ -93,6 +94,7 @@ class Model(object):
         self.eval_steps = args.eval_steps
         self.resume_model = args.resume_model
         self.wav_path = args.wav_path
+        self.train_wav_path = args.train_wav_path
         self.tool_path = args.tool_path
 
         # create a training dataset and an evaluation dataset
@@ -163,7 +165,7 @@ class Model(object):
                 param_group['lr'] = self.lr_list[epoch]
 
             start = timeit.default_timer()
-            for i, (features, labels, nframes, feat_size, label_size) in enumerate(
+            for i, (features, labels, nframes, feat_size, label_size, get_filename) in enumerate(
                     train_loader):  # features:torch.Size([4, 1, 250, 512])
                 labels_cpu = labels
                 i += start_iter
@@ -176,19 +178,26 @@ class Model(object):
 
                 outputs = net(features)  # torch.Size([4, 1, 64256])
 
-                for t in range(len(outputs[:])):
-                    output_asr = outputs.cpu().detach().numpy()[i][0]
-                    labels_asr = labels_cpu.numpy()[0][0]
-                    feat_asr_size = feat_size[i][0].item()
-                    label_asr_size = label_size[i][0].item()
+                for t in range(len(get_filename)):
+                    reader = h5py.File(get_filename[t], 'r')
+                    feature_asr = reader['noisy_raw'][:]
+                    label_asr = reader['clean_raw'][:]
 
+                    feat_asr_size = int(feat_size[t][0].item())
+                    label_asr_size = int(label_size[t][0].item())
+
+                    output_asr = self.train_asr_forward(feature_asr, net)
                     est_output_asr = output_asr[:feat_asr_size]
-                    ideal_labels_asr = labels_asr[:label_asr_size]
+                    ideal_labels_asr = label_asr
 
-                    #     est_path = os.path.join(self.wav_path, '{}_est.wav'.format(k + 1))
-                    #                 ideal_path = os.path.join(self.wav_path, '{}_ideal.wav'.format(k + 1))
-                    #                 sf.write(est_path, normalize_wav(est_s)[0], self.srate)
-                    #                 sf.write(ideal_path, normalize_wav(ideal_s)[0], self.srate)
+                    # 保存train的wav
+                    est_path = os.path.join(self.train_wav_path, '{}_est.wav'.format(t + 1))
+                    ideal_path = os.path.join(self.train_wav_path, '{}_ideal.wav'.format(t + 1))
+                    sf.write(est_path, normalize_wav(est_output_asr)[0], self.srate)
+                    sf.write(ideal_path, normalize_wav(ideal_labels_asr)[0], self.srate)
+
+                    # fbank_loss
+
 
                 outputs = outputs[:, :, :labels.shape[-1]]
 
@@ -338,6 +347,15 @@ class Model(object):
             avg_pesq = accu_pesq / count
         net.train()
         return avg_stoi, avg_snr, avg_pesq
+
+    def train_asr_forward(self, mix_raw, net):
+        feature = self.to_tensor(
+            self.get_frames(np.reshape(mix_raw, [1, 1, -1])))  # ndassy(70537,)->torch.Size([1, 1, 275, 512])
+        feature = feature.to(self.device)  # torch.Size([1, 1, 275, 512])
+        output = net(feature)  # output:torch.Size([1, 1, 70656])
+        output1 = output.cpu().detach().numpy()[0][0]  # output1:<class 'tuple'>: (70656,)
+        del output, feature
+        return output1
 
     def eval_forward(self, mix_raw, net):
         feature = self.to_tensor(

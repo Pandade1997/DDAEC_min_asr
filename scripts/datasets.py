@@ -191,6 +191,7 @@ class TrainingDataset(Dataset):
         # ///////////////
         feature_size = feature.size
         label_size = label.size
+        get_filename = filename
         # //////////////
         reader.close()
 
@@ -207,7 +208,22 @@ class TrainingDataset(Dataset):
         feature = self.to_tensor(feature)
         label = self.to_tensor(label)
 
-        return feature, label, feature_size, label_size
+        return feature, label, feature_size, label_size, get_filename
+
+
+class Training_asr_Dataset(Dataset):
+    r"""Evaluation dataset."""
+
+    def __init__(self, filename):
+        self.filename = filename
+
+    def __getitem__(self, index):
+        reader = h5py.File(self.filename, 'r')
+        reader_grp = reader[str(index)]
+        feature = reader_grp['noisy_raw'][:]
+        label = reader_grp['clean_raw'][:]
+
+        return feature, label
 
 
 class EvalDataset(Dataset):
@@ -247,25 +263,28 @@ class TrainCollate(object):
             label_dim = batch[0][1].shape[-1]
             feat_size = batch[0][2]
             label_size = batch[0][3]
+            get_filename = batch[0][4]
 
             feat_nchannels = batch[0][0].shape[0]
             label_nchannels = batch[0][1].shape[0]
             sorted_batch = sorted(batch, key=lambda x: x[1].shape[1], reverse=True)
-            lengths = list(map(lambda x: (x[0].shape[1], x[1].shape[1], x[2], x[3]), sorted_batch))
+            lengths = list(map(lambda x: (x[0].shape[1], x[1].shape[1], x[2], x[3], x[4]), sorted_batch))
 
             padded_feature_batch = torch.zeros((len(lengths), feat_nchannels, lengths[0][0], feat_dim))
             padded_label_batch = torch.zeros((len(lengths), label_nchannels, lengths[0][1]))
             lengths1 = torch.zeros((len(lengths),), dtype=torch.int32)
             padded_feat_size_batch = torch.zeros(len(lengths), 1)
             padded_label_size_batch = torch.zeros(len(lengths), 1)
+            padded_get_filename_batch = list()
             for i in range(len(lengths)):
                 padded_feature_batch[i, :, 0:lengths[i][0], :] = sorted_batch[i][0]
                 padded_label_batch[i, :, 0:lengths[i][1]] = sorted_batch[i][1]
                 lengths1[i] = lengths[i][1]
                 padded_feat_size_batch[i, 0] = batch[i][2]
                 padded_label_size_batch[i, 0] = batch[i][3]
+                padded_get_filename_batch.append(batch[i][4])
 
-            return padded_feature_batch, padded_label_batch, lengths1, padded_feat_size_batch, padded_label_size_batch
+            return padded_feature_batch, padded_label_batch, lengths1, padded_feat_size_batch, padded_label_size_batch, padded_get_filename_batch
         else:
             raise TypeError('`batch` should be a list.')
 
